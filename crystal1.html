@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lumina - AI Light Crystal Generator</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
+
+        :root {
+            --bg-color: #05050a;
+            --panel-bg: rgba(20, 20, 30, 0.6);
+            --border-color: rgba(255, 255, 255, 0.1);
+            --text-main: #ffffff;
+            --text-dim: #8892b0;
+            --accent: #00ffcc;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Outfit', sans-serif;
+            user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #webgl-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* UI Overlays */
+        .glass-panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 24px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        #header {
+            position: absolute;
+            top: 30px;
+            left: 30px;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        #header h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff, #88aaff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: 2px;
+        }
+
+        #header p {
+            color: var(--text-dim);
+            font-size: 1rem;
+            font-weight: 300;
+        }
+
+        #status-panel {
+            position: absolute;
+            top: 30px;
+            right: 30px;
+            z-index: 10;
+            min-width: 250px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .status-label {
+            font-size: 0.9rem;
+            color: var(--text-dim);
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #ff3366;
+            box-shadow: 0 0 10px #ff3366;
+            transition: all 0.3s ease;
+        }
+
+        .dot.active {
+            background-color: var(--accent);
+            box-shadow: 0 0 10px var(--accent);
+        }
+
+        /* Workflow Steps */
+        #workflow {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            display: flex;
+            gap: 20px;
+        }
+
+        .step {
+            padding: 12px 24px;
+            border-radius: 30px;
+            border: 1px solid var(--border-color);
+            background: rgba(10, 10, 15, 0.5);
+            color: var(--text-dim);
+            font-weight: 600;
+            transition: all 0.4s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .step.active {
+            background: rgba(0, 255, 204, 0.1);
+            border-color: var(--accent);
+            color: var(--accent);
+            box-shadow: 0 0 20px rgba(0, 255, 204, 0.2);
+        }
+
+        .step-number {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            font-size: 0.8rem;
+        }
+
+        .step.active .step-number {
+            background: var(--accent);
+            color: #000;
+        }
+
+        /* Camera Feed (Hidden, used for processing) */
+        #input-video {
+            display: none;
+        }
+
+        /* Debug/preview canvas for light detection */
+        #light-canvas {
+            position: absolute;
+            bottom: 30px;
+            left: 30px;
+            width: 160px;
+            height: 120px;
+            border-radius: 12px;
+            z-index: 10;
+            border: 1px solid var(--border-color);
+            opacity: 0.5;
+            transition: opacity 0.3s;
+        }
+
+        #light-canvas:hover {
+            opacity: 1;
+        }
+
+        /* Touchless buttons */
+        .touchless-zone {
+            position: absolute;
+            right: 30px;
+            bottom: 30px;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .t-btn {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            cursor: pointer;
+            overflow: hidden;
+        }
+
+        .t-btn i {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .t-btn span {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .t-btn .progress {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 0%;
+            background: rgba(0, 255, 204, 0.3);
+            z-index: -1;
+            transition: height 0.1s linear;
+        }
+
+        /* Download Link */
+        #download-link {
+            display: none;
+        }
+
+        /* Loading Overlay */
+        #loading {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-color);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 1s ease;
+        }
+
+        .loader-ring {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(0, 255, 204, 0.1);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="loading">
+        <div class="loader-ring"></div>
+        <h2 style="font-weight: 300; letter-spacing: 2px;">INITIALIZING LUMINA ENGINE</h2>
+    </div>
+
+    <!-- WebGL Canvas Container -->
+    <div id="webgl-container"></div>
+
+    <!-- UI Elements -->
+    <div id="header" class="glass-panel">
+        <h1>LUMINA</h1>
+        <p>AI Light to Crystal Generator</p>
+    </div>
+
+    <div id="status-panel" class="glass-panel">
+        <div class="status-item">
+            <span class="status-label">Camera Status</span>
+            <div class="status-indicator">
+                <div class="dot" id="dot-camera"></div>
+                <span id="txt-camera">Waiting...</span>
+            </div>
+        </div>
+        <div class="status-item">
+            <span class="status-label">Hand Tracking</span>
+            <div class="status-indicator">
+                <div class="dot" id="dot-hand"></div>
+                <span id="txt-hand">Searching...</span>
+            </div>
+        </div>
+        <div class="status-item">
+            <span class="status-label">Light Source</span>
+            <div class="status-indicator">
+                <div class="dot" id="dot-light"></div>
+                <span id="txt-light">Detecting...</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="workflow">
+        <div class="step active" id="step-1">
+            <div class="step-number">1</div>
+            Provide Light Source
+        </div>
+        <div class="step" id="step-2">
+            <div class="step-number">2</div>
+            Crystal Formation
+        </div>
+        <div class="step" id="step-3">
+            <div class="step-number">3</div>
+            Interact & Rotate
+        </div>
+    </div>
+
+    <canvas id="light-canvas"></canvas>
+
+    <div class="touchless-zone">
+        <div class="t-btn glass-panel" id="btn-save">
+            <div class="progress" id="prog-save"></div>
+            <i>📸</i>
+            <span>Hover Save</span>
+        </div>
+        <div class="t-btn glass-panel" id="btn-color">
+            <div class="progress" id="prog-color"></div>
+            <i>🎨</i>
+            <span>Pinch Color</span>
+        </div>
+    </div>
+
+    <video id="input-video" autoplay playsinline></video>
+    <a id="download-link"></a>
+
+    <!-- Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <script>
+        // --- System State ---
+        const state = {
+            phase: 1, // 1: Waiting Light, 2: Forming, 3: Interactive
+            lightDetected: false,
+            baseColor: new THREE.Color(0x00ffcc),
+            handPos: { x: 0, y: 0, z: 0 },
+            isPinching: false,
+            hoverTarget: null,
+            hoverTime: 0,
+            targetRotation: { x: 0, y: 0 }
+        };
+
+        // --- DOM Elements ---
+        const videoElement = document.getElementById('input-video');
+        const lightCanvas = document.getElementById('light-canvas');
+        const lightCtx = lightCanvas.getContext('2d');
+        const webglContainer = document.getElementById('webgl-container');
+
+        // --- Three.js Setup ---
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x05050a, 0.02);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 25;
+
+        // Renderer with properties for good exporting and glow
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        webglContainer.appendChild(renderer.domElement);
+
+        // Lights
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
+        scene.add(ambientLight);
+        const pointLight = new THREE.PointLight(state.baseColor, 2, 50);
+        scene.add(pointLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+        dirLight.position.set(5, 5, 5);
+        scene.add(dirLight);
+
+        // --- Crystal System ---
+        let particleSystem, crystalCore, crystalShell;
+        const PARTICLE_COUNT = 15000;
+        let particlesData = [];
+
+        function initCrystal() {
+            // 1. Particle Cloud (Initial State)
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(PARTICLE_COUNT * 3);
+            const colors = new Float32Array(PARTICLE_COUNT * 3);
+            const targetPositions = new Float32Array(PARTICLE_COUNT * 3);
+
+            // Generate target shape (Octahedron for crystal)
+            const targetGeom = new THREE.IcosahedronGeometry(8, 2); // Base shape for particles to form
+            targetGeom.computeVertexNormals();
+
+            // Sampler for points on mesh surface/volume
+            const posAttr = targetGeom.attributes.position;
+
+            const color = new THREE.Color();
+
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                // Random starting positions (scattered cloud)
+                const r = 20 + Math.random() * 20;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos((Math.random() * 2) - 1);
+
+                positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+                positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+                positions[i * 3 + 2] = r * Math.cos(phi);
+
+                // Target positions (form a crystal geometry)
+                // Randomly pick a vertex or interpolate between vertices for volume
+                let targetX, targetY, targetZ;
+                if (i < posAttr.count) {
+                    targetX = posAttr.getX(i);
+                    targetY = posAttr.getY(i);
+                    targetZ = posAttr.getZ(i);
+                } else {
+                    // Random point within crystal volume
+                    const radius = 8 * Math.cbrt(Math.random());
+                    const t = Math.random() * Math.PI * 2;
+                    const p = Math.acos((Math.random() * 2) - 1);
+                    targetX = radius * Math.sin(p) * Math.cos(t);
+                    targetY = (radius * 1.5) * Math.sin(p) * Math.sin(t); // Elongate Y
+                    targetZ = radius * Math.cos(p);
+                }
+
+                targetPositions[i * 3] = targetX;
+                targetPositions[i * 3 + 1] = targetY;
+                targetPositions[i * 3 + 2] = targetZ;
+
+                // Color (will be updated by AI pattern)
+                color.setHSL(Math.random() * 0.1 + 0.5, 0.8, 0.5);
+                colors[i * 3] = color.r;
+                colors[i * 3 + 1] = color.g;
+                colors[i * 3 + 2] = color.b;
+
+                particlesData.push({
+                    velocity: new THREE.Vector3(-0.05 + Math.random() * 0.1, -0.05 + Math.random() * 0.1, -0.05 + Math.random() * 0.1),
+                    active: false
+                });
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            geometry.setAttribute('targetPosition', new THREE.BufferAttribute(targetPositions, 3));
+
+            // Custom particle texture (glow dot)
+            const canvas = document.createElement('canvas');
+            canvas.width = 32; canvas.height = 32;
+            const ctx = canvas.getContext('2d');
+            const gradient = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+            gradient.addColorStop(0, 'rgba(255,255,255,1)');
+            gradient.addColorStop(0.2, 'rgba(255,255,255,0.8)');
+            gradient.addColorStop(0.5, 'rgba(0, 255, 204, 0.2)');
+            gradient.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 32, 32);
+            const texture = new THREE.CanvasTexture(canvas);
+
+            const material = new THREE.PointsMaterial({
+                size: 0.3,
+                vertexColors: true,
+                map: texture,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                transparent: true,
+                opacity: 0.8
+            });
+
+            particleSystem = new THREE.Points(geometry, material);
+            scene.add(particleSystem);
+
+            // 2. Solid Core (Hidden initially)
+            const coreGeom = new THREE.OctahedronGeometry(4, 0);
+            const coreMat = new THREE.MeshPhysicalMaterial({
+                color: 0xffffff,
+                metalness: 0.1,
+                roughness: 0.1,
+                transmission: 0.9, // glass-like
+                thickness: 2.0,
+                emissive: state.baseColor,
+                emissiveIntensity: 0.0,
+                transparent: true,
+                opacity: 0
+            });
+            crystalCore = new THREE.Mesh(coreGeom, coreMat);
+            crystalCore.scale.set(1, 1.8, 1);
+            scene.add(crystalCore);
+
+            // 3. Wireframe Shell (Hidden initially)
+            const shellGeom = new THREE.IcosahedronGeometry(7, 1);
+            const shellMat = new THREE.MeshBasicMaterial({
+                color: state.baseColor,
+                wireframe: true,
+                transparent: true,
+                opacity: 0,
+                blending: THREE.AdditiveBlending
+            });
+            crystalShell = new THREE.Mesh(shellGeom, shellMat);
+            crystalShell.scale.set(1, 1.5, 1);
+            scene.add(crystalShell);
+        }
+
+        initCrystal();
+
+        // --- Animations & Transitions ---
+        function triggerCrystalFormation(detectedColor) {
+            if (state.phase !== 1) return;
+            state.phase = 2;
+
+            // Update UI
+            document.getElementById('step-1').classList.remove('active');
+            document.getElementById('step-2').classList.add('active');
+
+            // Apply detected color
+            state.baseColor.set(detectedColor);
+            updateCrystalColor(state.baseColor);
+
+            // Animate Particles to Crystal Shape
+            const positions = particleSystem.geometry.attributes.position.array;
+            const targets = particleSystem.geometry.attributes.targetPosition.array;
+
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                const i3 = i * 3;
+                new TWEEN.Tween({ x: positions[i3], y: positions[i3 + 1], z: positions[i3 + 2] })
+                    .to({ x: targets[i3], y: targets[i3 + 1], z: targets[i3 + 2] }, 3000 + Math.random() * 2000)
+                    .easing(TWEEN.Easing.Cubic.InOut)
+                    .onUpdate(function (coords) {
+                        positions[i3] = coords.x;
+                        positions[i3 + 1] = coords.y;
+                        positions[i3 + 2] = coords.z;
+                    })
+                    .start();
+            }
+
+            // Fade in Core & Shell
+            new TWEEN.Tween({ val: 0 })
+                .to({ val: 1 }, 4000)
+                .delay(2000)
+                .easing(TWEEN.Easing.Quadratic.Out)
+                .onUpdate((obj) => {
+                    crystalCore.material.opacity = obj.val * 0.8;
+                    crystalCore.material.emissiveIntensity = obj.val * 0.5;
+                    crystalShell.material.opacity = obj.val * 0.3;
+                    particleSystem.geometry.attributes.position.needsUpdate = true;
+                })
+                .onComplete(() => {
+                    state.phase = 3;
+                    document.getElementById('step-2').classList.remove('active');
+                    document.getElementById('step-3').classList.add('active');
+                })
+                .start();
+        }
+
+        function updateCrystalColor(baseColor) {
+            pointLight.color.copy(baseColor);
+            crystalCore.material.emissive.copy(baseColor);
+            crystalShell.material.color.copy(baseColor);
+
+            // AI Color Pattern Generator (Analogous & Complementary)
+            const hsl = {};
+            baseColor.getHSL(hsl);
+
+            const colorsAttr = particleSystem.geometry.attributes.color.array;
+            const c = new THREE.Color();
+
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                const i3 = i * 3;
+                // Generate varied palette based on light source
+                const hueShift = (Math.random() - 0.5) * 0.3;
+                c.setHSL((hsl.h + hueShift) % 1.0, hsl.s, Math.random() * 0.5 + 0.3);
+                colorsAttr[i3] = c.r;
+                colorsAttr[i3 + 1] = c.g;
+                colorsAttr[i3 + 2] = c.b;
+            }
+            particleSystem.geometry.attributes.color.needsUpdate = true;
+        }
+
+        function randomizeColor() {
+            const newColor = new THREE.Color();
+            newColor.setHSL(Math.random(), 0.8, 0.5);
+
+            new TWEEN.Tween(state.baseColor)
+                .to({ r: newColor.r, g: newColor.g, b: newColor.b }, 1000)
+                .onUpdate(() => updateCrystalColor(state.baseColor))
+                .start();
+        }
+
+        function saveCrystalAsImage() {
+            // Render one frame and extract data URL
+            renderer.render(scene, camera);
+            const dataURL = renderer.domElement.toDataURL('image/png');
+
+            const link = document.getElementById('download-link');
+            link.download = `lumina_crystal_${Date.now()}.png`;
+            link.href = dataURL;
+            link.click();
+
+            // Visual feedback
+            const flash = document.createElement('div');
+            flash.style.position = 'absolute';
+            flash.style.top = '0'; flash.style.left = '0';
+            flash.style.width = '100%'; flash.style.height = '100%';
+            flash.style.backgroundColor = 'white';
+            flash.style.zIndex = '999';
+            flash.style.pointerEvents = 'none';
+            flash.style.transition = 'opacity 0.5s';
+            document.body.appendChild(flash);
+
+            setTimeout(() => { flash.style.opacity = '0'; }, 50);
+            setTimeout(() => { document.body.removeChild(flash); }, 550);
+        }
+
+
+        // --- Light Detection Analysis ---
+        function analyzeLightSource() {
+            if (state.phase !== 1 || !videoElement.videoWidth) return;
+
+            // Draw video to small canvas for analysis
+            lightCtx.drawImage(videoElement, 0, 0, lightCanvas.width, lightCanvas.height);
+            const imageData = lightCtx.getImageData(0, 0, lightCanvas.width, lightCanvas.height);
+            const data = imageData.data;
+
+            let maxBrightness = 0;
+            let brightR = 0, brightG = 0, brightB = 0;
+            let brightPixelCount = 0;
+
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+                // Human eye perception brightness
+                const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+
+                if (brightness > maxBrightness) {
+                    maxBrightness = brightness;
+                }
+
+                // Collect colors of very bright spots
+                if (brightness > 200) {
+                    brightR += r; brightG += g; brightB += b;
+                    brightPixelCount++;
+                }
+            }
+
+            // Update UI
+            if (maxBrightness > 50) {
+                document.getElementById('dot-light').className = 'dot active';
+                document.getElementById('txt-light').innerText = `Intensity: ${Math.round((maxBrightness / 255) * 100)}%`;
+            } else {
+                document.getElementById('dot-light').className = 'dot';
+                document.getElementById('txt-light').innerText = 'Detecting...';
+            }
+
+            // Threshold to trigger creation
+            if (maxBrightness > 220 && brightPixelCount > 10) {
+                // We found a strong light source!
+                state.lightDetected = true;
+
+                // Average the color of the bright spot to define crystal base color
+                let detectedColor = new THREE.Color(
+                    (brightR / brightPixelCount) / 255,
+                    (brightG / brightPixelCount) / 255,
+                    (brightB / brightPixelCount) / 255
+                );
+
+                // Enhance saturation for better visuals
+                const hsl = {};
+                detectedColor.getHSL(hsl);
+                detectedColor.setHSL(hsl.h, 1.0, 0.5);
+
+                document.getElementById('txt-light').innerText = 'Light Captured!';
+                document.getElementById('txt-light').style.color = '#00ffcc';
+
+                triggerCrystalFormation(detectedColor);
+            }
+        }
+
+
+        // --- MediaPipe Hand Tracking Setup ---
+        function onResults(results) {
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                document.getElementById('dot-hand').className = 'dot active';
+                document.getElementById('txt-hand').innerText = 'Hand Detected';
+
+                const landmarks = results.multiHandLandmarks[0];
+
+                // Get Center of Palm (approximate using middle finger base)
+                const palm = landmarks[9];
+
+                // Map hand coordinates to screen/rotation space
+                // MediaPipe coords: x, y in [0, 1]. x is flipped if camera is mirrored.
+                const mappedX = (palm.x - 0.5) * 2; // -1 to 1
+                const mappedY = -(palm.y - 0.5) * 2; // -1 to 1
+
+                if (state.phase === 3) {
+                    // 1. Motion Controlled Rotation
+                    state.targetRotation.y = mappedX * Math.PI;
+                    state.targetRotation.x = mappedY * Math.PI * 0.5;
+
+                    // 2. Gesture: Pinch to change color
+                    const thumbTip = landmarks[4];
+                    const indexTip = landmarks[8];
+                    const distance = Math.hypot(thumbTip.x - indexTip.x, thumbTip.y - indexTip.y);
+
+                    if (distance < 0.05 && !state.isPinching) {
+                        state.isPinching = true;
+                        randomizeColor();
+
+                        // Visual feedback on UI
+                        document.getElementById('btn-color').style.transform = 'scale(0.9)';
+                        document.getElementById('btn-color').style.borderColor = 'var(--accent)';
+                    } else if (distance >= 0.05) {
+                        state.isPinching = false;
+                        document.getElementById('btn-color').style.transform = 'scale(1)';
+                        document.getElementById('btn-color').style.borderColor = 'rgba(255,255,255,0.1)';
+                    }
+
+                    // 3. Touchless UI Interaction (Hover Save)
+                    checkTouchlessButtons(palm.x, palm.y);
+                }
+
+            } else {
+                document.getElementById('dot-hand').className = 'dot';
+                document.getElementById('txt-hand').innerText = 'Searching...';
+                state.hoverTarget = null;
+                resetProgressBars();
+            }
+        }
+
+        function checkTouchlessButtons(handX, handY) {
+            // Convert hand normalized coords to screen pixels
+            const px = handX * window.innerWidth;
+            const py = handY * window.innerHeight; // Note: MediaPipe Y is top-down
+
+            // Mirror correction (if video is mirrored)
+            const actualPx = window.innerWidth - px;
+
+            const saveBtn = document.getElementById('btn-save');
+            const rect = saveBtn.getBoundingClientRect();
+
+            // Check intersection (with padding)
+            const isHovering = (actualPx > rect.left - 20 && actualPx < rect.right + 20 &&
+                py > rect.top - 20 && py < rect.bottom + 20);
+
+            if (isHovering) {
+                if (state.hoverTarget !== 'save') {
+                    state.hoverTarget = 'save';
+                    state.hoverTime = 0;
+                }
+                state.hoverTime += 16; // Approx ms per frame
+
+                const progress = Math.min((state.hoverTime / 1500) * 100, 100);
+                document.getElementById('prog-save').style.height = `${progress}%`;
+
+                if (progress >= 100) {
+                    saveCrystalAsImage();
+                    state.hoverTime = 0; // Reset after trigger
+                    document.getElementById('prog-save').style.height = `0%`;
+                }
+            } else {
+                if (state.hoverTarget === 'save') {
+                    state.hoverTarget = null;
+                    document.getElementById('prog-save').style.height = `0%`;
+                }
+            }
+        }
+
+        function resetProgressBars() {
+            document.getElementById('prog-save').style.height = `0%`;
+        }
+
+
+        // Initialize Camera and MediaPipe
+        const hands = new Hands({
+            locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+            }
+        });
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.7
+        });
+
+        hands.onResults(onResults);
+
+        const cameraFeed = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({ image: videoElement });
+                analyzeLightSource();
+            },
+            width: 640,
+            height: 480
+        });
+
+        cameraFeed.start().then(() => {
+            document.getElementById('dot-camera').className = 'dot active';
+            document.getElementById('txt-camera').innerText = 'Active';
+
+            // Hide loading screen
+            setTimeout(() => {
+                const loading = document.getElementById('loading');
+                loading.style.opacity = '0';
+                setTimeout(() => loading.style.display = 'none', 1000);
+            }, 1000);
+        }).catch(err => {
+            document.getElementById('txt-camera').innerText = 'Camera Error';
+            console.error("Camera access denied or error:", err);
+            alert("Camera access is required for Light Detection and Hand Tracking.");
+        });
+
+
+        // --- Render Loop ---
+        const clock = new THREE.Clock();
+
+        function animate(time) {
+            requestAnimationFrame(animate);
+            TWEEN.update(time);
+
+            const delta = clock.getDelta();
+            const elapsed = clock.getElapsedTime();
+
+            // Continuous slight rotation
+            if (particleSystem) {
+                if (state.phase === 1) {
+                    // Cloud slowly swirling
+                    particleSystem.rotation.y += 0.002;
+                    particleSystem.rotation.x += 0.001;
+                } else if (state.phase === 3) {
+                    // Interactive rotation + slight auto rotation
+                    const smoothFactor = 0.05;
+                    particleSystem.rotation.y += (state.targetRotation.y - particleSystem.rotation.y) * smoothFactor;
+                    particleSystem.rotation.x += (state.targetRotation.x - particleSystem.rotation.x) * smoothFactor;
+
+                    // Sync core and shell with particles
+                    crystalCore.rotation.copy(particleSystem.rotation);
+                    crystalShell.rotation.copy(particleSystem.rotation);
+
+                    // Add breathing effect
+                    const scale = 1 + Math.sin(elapsed * 2) * 0.02;
+                    crystalCore.scale.set(scale, scale * 1.8, scale);
+                }
+            }
+
+            // Animate particles slightly when in shape
+            if (state.phase >= 2 && particleSystem) {
+                const positions = particleSystem.geometry.attributes.position.array;
+                for (let i = 0; i < PARTICLE_COUNT; i++) {
+                    // Just add a tiny wiggle for life-like effect
+                    if (Math.random() > 0.95) {
+                        positions[i * 3] += (Math.random() - 0.5) * 0.01;
+                        positions[i * 3 + 1] += (Math.random() - 0.5) * 0.01;
+                        positions[i * 3 + 2] += (Math.random() - 0.5) * 0.01;
+                    }
+                }
+                particleSystem.geometry.attributes.position.needsUpdate = true;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // Handle Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+    </script>
+</body>
+
+</html>
